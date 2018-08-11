@@ -1,6 +1,6 @@
 #include "replay.h"
 #include "../ocgcore/ocgapi.h"
-#include "../ocgcore/card.h"
+#include "../ocgcore/common.h"
 #include <algorithm>
 #include "lzma/LzmaLib.h"
 
@@ -123,7 +123,7 @@ void Replay::EndRecord() {
 	is_recording = false;
 }
 void Replay::SaveReplay(const wchar_t* name) {
-	wchar_t fname[64];
+	wchar_t fname[256];
 	myswprintf(fname, L"./replay/%ls.yrp", name);
 #ifdef WIN32
 	fp = _wfopen(fname, L"wb");
@@ -139,29 +139,35 @@ void Replay::SaveReplay(const wchar_t* name) {
 	fclose(fp);
 }
 bool Replay::OpenReplay(const wchar_t* name) {
-	wchar_t fname[256];
-	myswprintf(fname, L"./replay/%ls", name);
 #ifdef WIN32
-	fp = _wfopen(fname, L"rb");
+	fp = _wfopen(name, L"rb");
 #else
-	char fname2[256];
-	BufferIO::EncodeUTF8(fname, fname2);
-	fp = fopen(fname2, "rb");
+	char name2[256];
+	BufferIO::EncodeUTF8(name, name2);
+	fp = fopen(name2, "rb");
 #endif
+	if(!fp) {
+		wchar_t fname[256];
+		myswprintf(fname, L"./replay/%ls", name);
+#ifdef WIN32
+		fp = _wfopen(fname, L"rb");
+#else
+		char fname2[256];
+		BufferIO::EncodeUTF8(fname, fname2);
+		fp = fopen(fname2, "rb");
+#endif
+	}
 	if(!fp)
 		return false;
-	fseek(fp, 0, SEEK_END);
-	comp_size = ftell(fp) - sizeof(pheader);
-	fseek(fp, 0, SEEK_SET);
 	fread(&pheader, sizeof(pheader), 1, fp);
 	if(pheader.flag & REPLAY_COMPRESSED) {
-		fread(comp_data, 0x1000, 1, fp);
+		comp_size = fread(comp_data, 1, 0x1000, fp);
 		fclose(fp);
 		replay_size = pheader.datasize;
 		if(LzmaUncompress(replay_data, &replay_size, comp_data, &comp_size, pheader.props, 5) != SZ_OK)
 			return false;
 	} else {
-		fread(replay_data, 0x20000, 1, fp);
+		comp_size = fread(replay_data, 1, 0x20000, fp);
 		fclose(fp);
 		replay_size = comp_size;
 	}
@@ -186,6 +192,36 @@ bool Replay::CheckReplay(const wchar_t* name) {
 	fclose(rfp);
 	return rheader.id == 0x31707279 && rheader.version >= 0x12d0;
 }
+bool Replay::DeleteReplay(const wchar_t* name) {
+	wchar_t fname[256];
+	myswprintf(fname, L"./replay/%ls", name);
+#ifdef WIN32
+	BOOL result = DeleteFileW(fname);
+	return !!result;
+#else
+	char filefn[256];
+	BufferIO::EncodeUTF8(fname, filefn);
+	int result = unlink(filefn);
+	return result == 0;
+#endif
+}
+bool Replay::RenameReplay(const wchar_t* oldname, const wchar_t* newname) {
+	wchar_t oldfname[256];
+	wchar_t newfname[256];
+	myswprintf(oldfname, L"./replay/%ls", oldname);
+	myswprintf(newfname, L"./replay/%ls", newname);
+#ifdef WIN32
+	BOOL result = MoveFileW(oldfname, newfname);
+	return !!result;
+#else
+	char oldfilefn[256];
+	char newfilefn[256];
+	BufferIO::EncodeUTF8(oldfname, oldfilefn);
+	BufferIO::EncodeUTF8(newfname, newfilefn);
+	int result = rename(oldfilefn, newfilefn);
+	return result == 0;
+#endif
+}
 bool Replay::ReadNextResponse(unsigned char resp[64]) {
 	if(pdata - replay_data >= (int)replay_size)
 		return false;
@@ -195,6 +231,13 @@ bool Replay::ReadNextResponse(unsigned char resp[64]) {
 	memcpy(resp, pdata, len);
 	pdata += len;
 	return true;
+}
+void Replay::ReadName(wchar_t* data) {
+	if(!is_replaying)
+		return;
+	unsigned short buffer[20];
+	ReadData(buffer, 40);
+	BufferIO::CopyWStr(buffer, data, 20);
 }
 void Replay::ReadData(void* data, unsigned int length) {
 	if(!is_replaying)
@@ -213,13 +256,16 @@ short Replay::ReadInt16() {
 	if(!is_replaying)
 		return -1;
 	short ret = *((short*)pdata);
-	pdata += 4;
+	pdata += 2;
 	return ret;
 }
 char Replay::ReadInt8() {
 	if(!is_replaying)
 		return -1;
 	return *pdata++;
+}
+void Replay::Rewind() {
+	pdata = replay_data;
 }
 
 }

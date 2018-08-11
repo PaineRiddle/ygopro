@@ -4,7 +4,7 @@
 #pragma once
 
 #define _IRR_STATIC_LIB_
-#define _IRR_COMPILE_WITH_DX9_DEV_PACK
+#define IRR_COMPILE_WITH_DX9_DEV_PACK
 #ifdef _WIN32
 
 #include <WinSock2.h>
@@ -13,8 +13,12 @@
 
 #ifdef _MSC_VER
 #define myswprintf _swprintf
+#define mywcsncasecmp _wcsnicmp
+#define mystrncasecmp _strnicmp
 #else
 #define myswprintf swprintf
+#define mywcsncasecmp wcsncasecmp
+#define mystrncasecmp strncasecmp
 #endif
 
 #define socklen_t int
@@ -28,6 +32,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <locale.h>
 
 #define SD_BOTH 2
 #define SOCKET int
@@ -40,6 +45,8 @@
 
 #include <wchar.h>
 #define myswprintf(buf, fmt, ...) swprintf(buf, 4096, fmt, ##__VA_ARGS__)
+#define mywcsncasecmp wcsncasecmp
+#define mystrncasecmp strncasecmp
 inline int _wtoi(const wchar_t * s) {
 	wchar_t * endptr;
 	return (int)wcstol(s, &endptr, 10);
@@ -61,7 +68,7 @@ inline int _wtoi(const wchar_t * s) {
 #include "mysignal.h"
 #include "mythread.h"
 #include "../ocgcore/ocgapi.h"
-#include "../ocgcore/card.h"
+#include "../ocgcore/common.h"
 
 using namespace irr;
 using namespace core;
@@ -73,5 +80,8 @@ using namespace gui;
 extern const unsigned short PRO_VERSION;
 extern int enable_log;
 extern bool exit_on_return;
+extern bool open_file;
+extern wchar_t open_file_name[256];
+extern bool bot_mode;
 
 #endif
